@@ -1,0 +1,39 @@
+{
+    "name": "nickjbedford/tagcache",
+    "type": "library",
+    "description": "Provides file-based caching of generated/fetched data or text using keys based on objects, allowing for unified key naming conventions and efficient clearing of caches.",
+    "keywords": [
+		"caching", "php", "cache", "performance"
+	],
+    "homepage": "https://github.com/nickjbedford/tagcache",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Nick Bedford",
+            "email": "nick@nickbedford.com",
+            "homepage": "https://www.nickjbedford.com",
+            "role": "Developer"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "YetAnother\\TagCache\\": "src/"
+        },
+        "files": [
+            "src/helpers.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        },
+        "files": [
+        ]
+    },
+	"require": {
+		"php": ">=8.4"
+	},
+    "require-dev": {
+        "phpunit/phpunit": "*"
+    }
+}
