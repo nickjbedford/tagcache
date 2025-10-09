@@ -18,6 +18,9 @@
 		public readonly string $cacheDirectory;
 		public readonly string $tagDirectory;
 		
+		public float $lastGenerateTime = 0.0;
+		public float $lastLinksCreationTime = 0.0;
+		
 		/**
 		 * @var Cacher|null $default The default Cacher instance. This must be assigned manually.
 		 */
@@ -113,7 +116,9 @@
 		                                   callable|Closure $generator,
 		                                   bool $serialize = true): mixed
 		{
+			$start = microtime(true);
 			$pathKey = $key->key;
+			
 			if ($this->hashedPaths)
 				$pathKey = md5($pathKey);
 			
@@ -122,7 +127,6 @@
 			if (($fp = fopen($path, 'w')) === false)
 				throw new CacheStorageException("Failed to open path for writing: $path");
 			
-			$start = time();
 			$lockAcquired = false;
 			
 			while ((time() - $start) < self::LOCK_WAIT_TIMEOUT)
@@ -162,7 +166,13 @@
 			flock($fp, LOCK_UN);
 			fclose($fp);
 			@chmod($path, 0664);
-			$this->createLinks($key, $path);
+			
+			$this->lastGenerateTime = microtime(true) - $start;
+			
+			$start = microtime(true);
+			$this->createLinks($key, $pathKey, $path);
+			$this->lastLinksCreationTime = microtime(true) - $start;
+			
 			return $value;
 		}
 		
@@ -281,16 +291,16 @@
 				@chmod($directory, 02775);
 		}
 		
-		private function createLinks(Key $key, string $path): void
+		private function createLinks(Key $key, string $canonicalKey, string $path): void
 		{
 			foreach($key->tags as $tag=>$id)
 			{
-				$tagDir = $this->tagDirectory . sanitize_cache_key_filename($tag) . DIRECTORY_SEPARATOR;
+				$tagDir = $this->tagDirectory . sanitize_cache_key_filename($tag) . DIRECTORY_SEPARATOR . sanitize_cache_key_filename($id);
 				$this->createDirectory($tagDir);
-				$linkPath = $tagDir . sanitize_cache_key_filename($id) . '.link';
-				if (file_exists($linkPath))
-					@unlink($linkPath);
-				@symlink($path, $linkPath);
+				$linkPath = $tagDir . DIRECTORY_SEPARATOR . $canonicalKey;
+				
+				if (!file_exists($linkPath) || @unlink($linkPath))
+					@symlink($path, $linkPath);
 			}
 		}
 	}

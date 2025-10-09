@@ -1,6 +1,7 @@
 <?php
 	namespace Tests;
 	
+	use Random\RandomException;
 	use YetAnother\TagCache\Key;
 	
 	class KeyTests extends TestCase

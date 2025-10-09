@@ -1,12 +1,14 @@
 <?php
 	namespace Tests;
 	
+	use Throwable;
 	use YetAnother\TagCache\CacheStorageException;
 	
 	class TaggedCachingTests extends TestCase
 	{
 		/**
 		 * @throws CacheStorageException
+		 * @throws Throwable
 		 */
 		function testSinglyTaggedCacheIsGenerated()
 		{

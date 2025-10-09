@@ -16,6 +16,13 @@
 			$this->cacher = new Cacher($rootDirectory);
 		}
 		
+		protected function tearDown(): void
+		{
+			parent::tearDown();
+			$rootDirectory = __DIR__ . DIRECTORY_SEPARATOR . '.caches';
+			$this->removeDirectory($rootDirectory);
+		}
+		
 		/**
 		 * Recursively removes a directory and all its contents.
 		 * @param string $directory
