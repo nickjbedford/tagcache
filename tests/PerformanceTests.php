@@ -32,7 +32,16 @@
 			
 			$duration = (microtime(true) - $start) * 1000;
 			$microseconds = ($duration * 1000) / $cycles;
-			file_put_contents(__DIR__ . '/test_keygen.txt', "Key generation for $cycles cycles took {$duration}ms\nMicroseconds per cycle: {$microseconds}us\nFinal hash: $finalHash\n", LOCK_EX);
+			$lines = [
+				"Key generation for $cycles cycles took {$duration}ms",
+				"Microseconds per cycle: {$microseconds}us",
+				"Final hash: $finalHash",
+			];
+			
+			if (!is_dir(__DIR__ . '/results'))
+				mkdir(__DIR__ . '/results',);
+			file_put_contents(__DIR__ . '/results/key_generation_performance.txt', join("\n", $lines), LOCK_EX);
+			
 			$this->assertTrue(true);
 		}
 		
@@ -103,6 +112,9 @@
 			
 			$lines[] = "{$cycles}x cache hits took $durationSeconds seconds";
 			$lines[] = "Microseconds per cycle: {$perCycle}us";
-			file_put_contents(__DIR__ . '/test_cachehit.txt', join("\n", $lines), LOCK_EX);
+			
+			if (!is_dir(__DIR__ . '/results'))
+				mkdir(__DIR__ . '/results',);
+			file_put_contents(__DIR__ . '/results/cache_hit_performance.txt', join("\n", $lines), LOCK_EX);
 		}
 	}
