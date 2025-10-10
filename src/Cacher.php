@@ -3,6 +3,7 @@
 	namespace YetAnother\TagCache;
 	
 	use Closure;
+	use FilesystemIterator;
 	use RuntimeException;
 	use Throwable;
 	
@@ -14,12 +15,19 @@
 		const int DEFAULT_LIFETIME = 86400;
 		const int LOCK_WAIT_TIMEOUT = 30; // Wait for a maximum of 30 seconds to acquire a lock (this allows large content generation to complete without being too eager).
 		const int LOCK_ATTEMPT_INTERVAL = 10000; // Attempt to acquire a lock every 10 milliseconds at most
-		
+		const string KEY_NAME_TAG = '_key_name';
 		public readonly string $cacheDirectory;
 		public readonly string $tagDirectory;
 		
 		public float $lastGenerateTime = 0.0;
 		public float $lastLinksCreationTime = 0.0;
+		
+		/**
+		 * @var string[] $removeNamespaces If set, these namespaces will be removed from the class names when generating tags, such as "App\Models\".
+		 */
+		public static array $removeNamespaces = [
+			'App\\Models\\'
+		];
 		
 		/**
 		 * @var Cacher|null $default The default Cacher instance. This must be assigned manually.
@@ -272,6 +280,112 @@
 			$this->generateDuringLock($key, fn() => $value, $serialize);
 		}
 		
+		/**
+		 * Clears cached entries associated with a specific cache key name regardless of which type/ID
+		 * tags it was tagged with. For example, for all keys named "front_end_table_row", call
+		 * invalidateNamed("front_end_table_row") to clear all cached entries with that name.
+		 * The name will be sanitized and lowercased to match cached filesystem naming conventions.
+		 * @param string $name The cache key name to invalidate.
+		 * @return int The number of cache entries invalidated.
+		 */
+		public function invalidateNamed(string $name): int
+		{
+			return $this->invalidateTag(self::KEY_NAME_TAG, $name);
+		}
+		
+		/**
+		 * Clears cached entries associated with one or more tags. Tags should be provided as an associative array
+		 * where the key is the tag type and the value is the tag identifier. For example, $tags = [ 'user' => 123, 'account' => 456 ].
+		 * Tag types and IDs will be sanitized and lowercased to match cached filesystem naming conventions.
+		 * @param array<string, string> $tags An associative array of tags to invalidate.
+		 * @return int The number of cache entries invalidated.
+		 */
+		public function invalidateTags(array $tags): int
+		{
+			$count = 0;
+			foreach($tags as $type=>$id)
+			{
+				$count += $this->invalidateTag($type, $id);
+			}
+			return $count;
+		}
+		
+		/**
+		 * Clears cached entries associated with a specific tag type and identifier. The tag type and ID
+		 * will be sanitized and lowercased to match cached filesystem naming conventions.
+		 * @param string $type The tag type or class name.
+		 * @param string|int|null $id The tag identifier.
+		 * @return int The number of cache entries invalidated.
+		 */
+		public function invalidateTag(string $type, string|int|null $id): int
+		{
+			foreach(self::$removeNamespaces as $namespace)
+			{
+				$type = str_replace($namespace, '', $type);
+			}
+			
+			$type = sanitize_cache_key(ltrim($type, '\\'));
+			$id = sanitize_cache_key(strval($id ?? '0'));
+			
+			$tagDir = $this->tagDirectory . $type . DIRECTORY_SEPARATOR . $id;
+			if (!is_dir($tagDir))
+				return 0;
+			
+			$count = 0;
+			$iterator = new FilesystemIterator($tagDir, FilesystemIterator::SKIP_DOTS | FilesystemIterator::CURRENT_AS_PATHNAME);
+			foreach($iterator as $path)
+			{
+				$source = readlink($path);
+				if ($source && file_exists($source))
+				{
+					@unlink($source);
+					$count++;
+				}
+				
+				@unlink($path);
+			}
+			
+			@rmdir($this->tagDirectory . $type . DIRECTORY_SEPARATOR . $id);
+			return $count;
+		}
+		
+		/**
+		 * Clears all cached entries associated with the specified object's tag.
+		 * @return int The number of cache entries invalidated.
+		 */
+		public function invalidateObject(object $object, string $property = 'id'): int
+		{
+			return $this->invalidateTag(get_class($object), $object->{$property} ?? 0);
+		}
+		
+		/**
+		 * Clears all cached entries associated with the global tag.
+		 * @return int The number of cache entries invalidated.
+		 */
+		public function invalidateObjects(array $objects, string $property = 'id'): int
+		{
+			$count = 0;
+			foreach($objects as $object)
+			{
+				$count += $this->invalidateObject($object, $property);
+			}
+			return $count;
+		}
+		
+		/**
+		 * Clears all cached entries associated with the global tag.
+		 * @return int The number of cache entries invalidated.
+		 */
+		public function invalidateGlobal(): int
+		{
+			return $this->invalidateTag('global', 0);
+		}
+		
+		/**
+		 * Creates a directory if it does not exist, ensuring it is writable and has the correct permissions.
+		 * @param string $directory The directory path to create.
+		 * @return void
+		 */
 		private function createDirectory(string $directory): void
 		{
 			if (!is_dir($directory) &&
@@ -291,11 +405,21 @@
 				@chmod($directory, 02775);
 		}
 		
+		/**
+		 * Creates symbolic links for the cache file in the appropriate tag directories.
+		 * @param Key $key The cache key declaration.
+		 * @param string $canonicalKey The canonical key (hashed if applicable).
+		 * @param string $path The path to the cache file.
+		 * @return void
+		 */
 		private function createLinks(Key $key, string $canonicalKey, string $path): void
 		{
-			foreach($key->tags as $tag=>$id)
+			$tags = $key->tags;
+			$tags[self::KEY_NAME_TAG] = $key->name;
+			
+			foreach($tags as $tag=>$id)
 			{
-				$tagDir = $this->tagDirectory . sanitize_cache_key_filename($tag) . DIRECTORY_SEPARATOR . sanitize_cache_key_filename($id);
+				$tagDir = $this->tagDirectory . sanitize_cache_key($tag) . DIRECTORY_SEPARATOR . sanitize_cache_key($id);
 				$this->createDirectory($tagDir);
 				$linkPath = $tagDir . DIRECTORY_SEPARATOR . $canonicalKey;
 				

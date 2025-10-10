@@ -12,17 +12,12 @@
 		private(set) bool $global = false;
 		
 		/**
-		 * @var string $removeNamespace If set, this namespace will be removed from the class names when generating tags, such as App\Models\.
-		 */
-		public static string $removeNamespace = 'App\\Models\\';
-		
-		/**
 		 * Initializes a new instance of the Key class with the specified name.
 		 * @param string $name The name of the cache key to be used as a key suffix.
 		 */
 		public function __construct(string $name)
 		{
-			$this->name = strtolower($name);
+			$this->name = sanitize_cache_key($name);
 		}
 		
 		/**
@@ -31,7 +26,10 @@
 		 */
 		public function global(bool $global = true): self
 		{
-			$this->global = $global;
+			if ($global)
+				$this->tags['global'] = 0;
+			else
+				unset($this->tags['global']);
 			return $this;
 		}
 		
@@ -103,18 +101,23 @@
 		/**
 		 * Tags the key with a type and identifier.
 		 * @param string $type The type or class name to tag the cache with.
-		 * @param string|int $id The identifier for the type.
+		 * @param string|int|null $id The identifier for the type.
 		 * @return self The current Key instance for method chaining.
 		 */
-		public function tag(string $type, string|int $id): self
+		public function tag(string $type, string|int|null $id): self
 		{
-			if (self::$removeNamespace !== '')
-				$type = str_replace(self::$removeNamespace, '', $type);
+			foreach(Cacher::$removeNamespaces as $namespace)
+			{
+				$type = str_replace($namespace, '', $type);
+			}
+			
+			$type = sanitize_cache_key(ltrim($type, '\\'));
+			$id = sanitize_cache_key(strval($id ?? 0));
 			
 			assert(!empty($type), 'Type cannot be empty');
 			assert($id !== '', 'ID cannot be empty');
 			
-			$this->tags[strtolower(ltrim($type, '\\'))] = $id;
+			$this->tags[$type] = $id;
 			return $this;
 		}
 		
@@ -126,11 +129,10 @@
 			get
 			{
 				ksort($this->tags);
-				$parts = $this->global ? ['global'] : [];
 				foreach ($this->tags as $type => $id)
 					$parts[] = "{$type}_$id";
 				$parts[] = $this->name;
-				return sanitize_cache_key_filename(implode('-', $parts));
+				return implode('-', $parts);
 			}
 		}
 	}

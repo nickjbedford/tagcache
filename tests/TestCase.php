@@ -9,11 +9,18 @@
 	{
 		protected Cacher $cacher;
 		
+		const string RESULTS_DIR = __DIR__ . '/.test-results';
+		
 		protected function setUp(): void
 		{
+			error_reporting(E_ALL);
 			$rootDirectory = __DIR__ . DIRECTORY_SEPARATOR . '.caches';
 			$this->removeDirectory($rootDirectory);
 			$this->cacher = new Cacher($rootDirectory);
+			Cacher::$removeNamespaces[] = 'Tests\\';
+			
+			if (!is_dir(self::RESULTS_DIR))
+				mkdir(self::RESULTS_DIR, recursive: true);
 		}
 		
 		protected function tearDown(): void

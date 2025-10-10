@@ -6,7 +6,7 @@
 	 * @param string $basename
 	 * @return string
 	 */
-	function sanitize_cache_key_filename(string $basename): string
+	function sanitize_cache_key(string $basename): string
 	{
 		$basename = preg_replace('/[^a-z0-9+_.\-]/i', '_', strtolower($basename));
 		return str_replace(['\\', '..'], '_', $basename);
@@ -14,12 +14,13 @@
 	
 	/**
 	 * Creates a cache key with the given name and tagged objects.
+	 *
 	 * @param string $name The base name for the cache key.
-	 * @param object ...$tags Objects to tag the cache key with (using the $id property on each object).
+	 * @param object ...$objects Objects to tag the cache key with (using the $id property on each object).
 	 * @return Key The generated cache key.
 	 */
-	function tckey(string $name, object... $tags): Key
+	function tckey(string $name, object ...$objects): Key
 	{
-		return new Key($name)->with(...$tags);
+		return new Key($name)->with($objects);
 	}
 	

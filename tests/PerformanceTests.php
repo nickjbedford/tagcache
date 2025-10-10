@@ -38,9 +38,7 @@
 				"Final hash: $finalHash",
 			];
 			
-			if (!is_dir(__DIR__ . '/results'))
-				mkdir(__DIR__ . '/results',);
-			file_put_contents(__DIR__ . '/results/key_generation_performance.txt', join("\n", $lines), LOCK_EX);
+			file_put_contents(self::RESULTS_DIR . '/key_generation_performance.txt', join("\n", $lines), LOCK_EX);
 			
 			$this->assertTrue(true);
 		}
@@ -113,8 +111,6 @@
 			$lines[] = "{$cycles}x cache hits took $durationSeconds seconds";
 			$lines[] = "Microseconds per cycle: {$perCycle}us";
 			
-			if (!is_dir(__DIR__ . '/results'))
-				mkdir(__DIR__ . '/results',);
-			file_put_contents(__DIR__ . '/results/cache_hit_performance.txt', join("\n", $lines), LOCK_EX);
+			file_put_contents(self::RESULTS_DIR . '/cache_hit_performance.txt', join("\n", $lines), LOCK_EX);
 		}
 	}

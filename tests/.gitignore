@@ -1,3 +1,3 @@
 .caches
+.test-results
 test*.txt
-results/
