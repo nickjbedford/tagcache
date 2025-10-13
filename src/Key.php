@@ -135,4 +135,25 @@
 				return implode('-', $parts);
 			}
 		}
+		
+		/**
+		 * @var string $key The generated cache key based on the name and tags.
+		 */
+		public string $hashedKey
+		{
+			get
+			{
+				return self::hash($this->key);
+			}
+		}
+		
+		/**
+		 * Generates a hash for the given key string using the appropriate hashing algorithm.
+		 * @param string $key The key string to hash.
+		 * @return string The hashed key.
+		 */
+		public static function hash(string $key): string
+		{
+			return hash('xxh128', $key);
+		}
 	}

@@ -22,6 +22,8 @@
 		public float $lastGenerateTime = 0.0;
 		public float $lastLinksCreationTime = 0.0;
 		
+		const bool HASH_XXH128 = true;
+		
 		/**
 		 * @var string[] $removeNamespaces If set, these namespaces will be removed from the class names when generating tags, such as "App\Models\".
 		 */
@@ -34,9 +36,12 @@
 		 */
 		public static ?self $default = null;
 		
-		public function __construct(string                 $rootDirectory,
-		                            public readonly string $language = 'en',
-		                            public readonly bool   $hashedPaths = true)
+		/**
+		 * @param string $rootDirectory The root directory where cache and tag directories will be created.
+		 * @param string $language The language code for the cache (e.g., 'en', 'fr'). Default is 'en'.
+		 */
+		public function __construct(string $rootDirectory,
+		                            public readonly string $language = 'en')
 		{
 			$this->cacheDirectory = rtrim($rootDirectory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . $this->language . DIRECTORY_SEPARATOR;
 			$this->tagDirectory = rtrim($rootDirectory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'tags' . DIRECTORY_SEPARATOR . $this->language . DIRECTORY_SEPARATOR;
@@ -56,8 +61,7 @@
 			if ($key instanceof Key)
 				$key = $key->key;
 			
-			if ($this->hashedPaths)
-				$key = md5($key);
+			$key = Key::hash($key);
 			
 			$path = "$this->cacheDirectory$key.cache";
 			
@@ -125,11 +129,8 @@
 		                                   bool $serialize = true): mixed
 		{
 			$start = microtime(true);
-			$pathKey = $key->key;
 			
-			if ($this->hashedPaths)
-				$pathKey = md5($pathKey);
-			
+			$pathKey = $key->hashedKey;
 			$path = "$this->cacheDirectory$pathKey.cache";
 			
 			if (($fp = fopen($path, 'w')) === false)

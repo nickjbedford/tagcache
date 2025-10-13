@@ -15,6 +15,6 @@
 				->global();
 			
 			$this->assertEquals('category_news-datefrom_20250101-dateto_20251231-global_0-testobject_7-user_42-user_profile', $key->key);
-			$this->assertEquals('e95c2edaacf7cd8c838ca694148317a8', md5($key->key));
+			$this->assertEquals('339f26c10b32492de83c56a83f71eb23', Key::hash($key->key));
 		}
 	}

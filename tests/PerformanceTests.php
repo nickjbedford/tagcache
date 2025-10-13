@@ -15,7 +15,7 @@
 		function testKeyGenerationPerformance()
 		{
 			$cycles = 500_000 + random_int(0, 100);
-			$finalHash = md5('initial_hash');
+			$finalHash = Key::hash('initial_hash');
 			$start = microtime(true);
 			
 			for($i = 0; $i < $cycles; $i++)
@@ -27,7 +27,7 @@
 					->dateRange('2025-01-01', '2025-12-31')
 					->global();
 				
-				$finalHash = md5($key->key);
+				$finalHash = $key->hashedKey;
 			}
 			
 			$duration = (microtime(true) - $start) * 1000;
@@ -51,7 +51,7 @@
 		function testCacheHitPerformance()
 		{
 			$cycles = 5000 + random_int(0, 100);
-			$finalHash = md5('initial_hash');
+			$finalHash = Key::hash('initial_hash');
 			$keys = [];
 			$start = microtime(true);
 			$totalLinksCreationTime = 0.0;
@@ -71,7 +71,7 @@
 				$totalStoreTime += $this->cacher->lastGenerateTime;
 				$totalLinksCreationTime += $this->cacher->lastLinksCreationTime;
 				
-				$finalHash = md5($key->key);
+				$finalHash = Key::hash($key->key);
 				$keys[] = $key;
 			}
 			
