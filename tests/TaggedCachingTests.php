@@ -3,6 +3,7 @@
 	
 	use Throwable;
 	use YetAnother\TagCache\CacheStorageException;
+	use function YetAnother\TagCache\cache_key;
 	
 	class TaggedCachingTests extends TestCase
 	{
@@ -16,7 +17,7 @@
 			$model = new TestObject(5);
 			$didGenerate = false;
 			
-			$value = $this->cacher->getOrGenerateText($key = tckey('greeting', $model), $generator = function() use (&$didGenerate, $text)
+			$value = $this->cacher->getOrGenerateText($key = cache_key('greeting', $model), $generator = function() use (&$didGenerate, $text)
 			{
 				$didGenerate = true;
 				return $text;
@@ -45,7 +46,7 @@
 			$model = new TestObject(5);
 			$didGenerate = false;
 			
-			$value = $this->cacher->getOrGenerateText($key = tckey('greeting', $model), $generator = function() use (&$didGenerate, $text)
+			$value = $this->cacher->getOrGenerateText($key = cache_key('greeting', $model), $generator = function() use (&$didGenerate, $text)
 			{
 				$didGenerate = true;
 				return $text;
@@ -77,7 +78,7 @@
 			$text = 'Hello, world!';
 			$model = new TestObject(5);
 			
-			$this->cacher->getOrGenerateText($key = tckey('greeting', $model), fn() => $text);
+			$this->cacher->getOrGenerateText($key = cache_key('greeting', $model), fn() => $text);
 			
 			$this->assertEquals($text, $this->cacher->getOrGenerateText($key, fn() => 'Should not be called'));
 			
@@ -96,7 +97,7 @@
 			$model1 = new TestObject(5);
 			$model2 = new OtherObject(99);
 			
-			$key = tckey('greeting', $model1, $model2);
+			$key = cache_key('greeting', $model1, $model2);
 			
 			foreach([$model1, $model2] as $model)
 			{

@@ -305,6 +305,9 @@
 			$iterator = new FilesystemIterator($tagDir, FilesystemIterator::SKIP_DOTS | FilesystemIterator::CURRENT_AS_PATHNAME);
 			foreach($iterator as $path)
 			{
+				if (!is_link($path) || is_dir($path))
+					continue;
+				
 				$source = readlink($path);
 				if ($source)
 				{
