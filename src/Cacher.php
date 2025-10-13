@@ -1,4 +1,5 @@
 <?php
+	/** @noinspection PhpUnused */
 	
 	namespace YetAnother\TagCache;
 	
@@ -71,28 +72,7 @@
 			if ((filemtime($path) + $lifetime) < time())
 				return null;
 			
-			if (($fp = fopen($path, 'rb')) === false)
-				return null;
-			
-			$start = time();
-			$lockAcquired = false;
-			
-			while ((time() - $start) < self::LOCK_WAIT_TIMEOUT)
-			{
-				if (flock($fp, LOCK_SH | LOCK_NB))
-				{
-					$lockAcquired = true;
-					break;
-				}
-				
-				usleep(self::LOCK_ATTEMPT_INTERVAL);
-			}
-			
-			if (!$lockAcquired)
-			{
-				fclose($fp);
-				return null;
-			}
+			$fp = $this->acquireLock($path, 'rb', LOCK_SH);
 			
 			$content = stream_get_contents($fp);
 			flock($fp, LOCK_UN);
@@ -133,26 +113,15 @@
 			$pathKey = $key->hashedKey;
 			$path = "$this->cacheDirectory$pathKey.cache";
 			
-			if (($fp = fopen($path, 'w')) === false)
-				throw new CacheStorageException("Failed to open path for writing: $path");
+			$timedOut = null;
+			$fp = $this->acquireLock($path, 'wb', LOCK_EX, $timedOut);
 			
-			$lockAcquired = false;
-			
-			while ((time() - $start) < self::LOCK_WAIT_TIMEOUT)
+			if (!$fp)
 			{
-				if (flock($fp, LOCK_EX | LOCK_NB))
-				{
-					$lockAcquired = true;
-					break;
-				}
-				
-				usleep(self::LOCK_ATTEMPT_INTERVAL);
-			}
-			
-			if (!$lockAcquired)
-			{
-				fclose($fp);
-				throw new CacheStorageException("Failed to acquire lock for writing after " . self::LOCK_WAIT_TIMEOUT . " seconds: $path");
+				if ($timedOut)
+					throw new CacheStorageException("Failed to acquire lock for writing after " . self::LOCK_WAIT_TIMEOUT . " seconds: $path");
+				else
+					throw new CacheStorageException("Failed to open cache file for writing: $path");
 			}
 			
 			try
@@ -337,9 +306,9 @@
 			foreach($iterator as $path)
 			{
 				$source = readlink($path);
-				if ($source && file_exists($source))
+				if ($source)
 				{
-					@unlink($source);
+					$this->unlink($source);
 					$count++;
 				}
 				
@@ -407,6 +376,29 @@
 		}
 		
 		/**
+		 * Attempts to unlink (delete) a file if it exists. If it cannot be unlinked immediately,
+		 * it will attempt to wait for an exclusive lock on the file before unlinking it, but only
+		 * up to two seconds.
+		 * @param string $source
+		 * @return void
+		 */
+		private function unlink(string $source): void
+		{
+			if (!file_exists($source))
+				return;
+			
+			if (@unlink($source))
+				return;
+			
+			if ($fp = $this->acquireLock($source, 'rb',LOCK_EX, $timedOut, 2))
+			{
+				flock($fp, LOCK_UN);
+				fclose($fp);
+				@unlink($source);
+			}
+		}
+		
+		/**
 		 * Creates symbolic links for the cache file in the appropriate tag directories.
 		 * @param Key $key The cache key declaration.
 		 * @param string $canonicalKey The canonical key (hashed if applicable).
@@ -424,8 +416,55 @@
 				$this->createDirectory($tagDir);
 				$linkPath = $tagDir . DIRECTORY_SEPARATOR . $canonicalKey;
 				
-				if (!file_exists($linkPath) || @unlink($linkPath))
-					@symlink($path, $linkPath);
+				if (file_exists($linkPath))
+					@unlink($linkPath);
+				
+				@symlink($path, $linkPath);
 			}
+		}
+		
+		/**
+		 * Attempts to acquire a lock on the specified cache file.
+		 *
+		 * @param string $path The path to the cache file to lock.
+		 * @param string $mode The file mode to open the file with (e.g., 'rb' for read, 'wb' for write).
+		 * @param int $lock The type of lock to acquire (LOCK_SH for shared, LOCK_EX for exclusive).
+		 * @param bool|null $timedOut Set to true if the lock acquisition timed out, false otherwise.
+		 * @param int $timeout The maximum time in seconds to wait for the lock.
+		 * @return resource|null The file pointer if the lock was acquired, or null on failure.
+		 */
+		private function acquireLock(string $path,
+		                             string $mode,
+		                             int $lock,
+		                             ?bool &$timedOut = null,
+		                             int $timeout = self::LOCK_WAIT_TIMEOUT)
+		{
+			$timedOut = false;
+			
+			if (($fp = fopen($path, $mode)) === false)
+				return null;
+			
+			$start = time();
+			$lockAcquired = false;
+			
+			while ((time() - $start) < $timeout)
+			{
+				if (flock($fp, $lock | LOCK_NB))
+				{
+					$lockAcquired = true;
+					break;
+				}
+				
+				usleep(self::LOCK_ATTEMPT_INTERVAL);
+			}
+			
+			if (!$lockAcquired)
+			{
+				fclose($fp);
+				$timedOut = true;
+				return null;
+			}
+			
+			return $fp;
 		}
 	}
