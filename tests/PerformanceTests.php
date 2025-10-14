@@ -68,8 +68,8 @@
 					->global();
 				
 				$this->cacher->store($key, $key);
-				$totalStoreTime += $this->cacher->lastGenerateTime;
-				$totalLinksCreationTime += $this->cacher->lastLinksCreationTime;
+				$totalStoreTime += $this->cacher->lastTimeToGenerate;
+				$totalLinksCreationTime += $this->cacher->lastTimeToCreateSymlinks;
 				
 				$finalHash = Key::hash($key->key);
 				$keys[] = $key;

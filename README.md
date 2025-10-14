@@ -28,9 +28,11 @@ cache-dir/
 └── tags/
     └── en/
         └── order/    
-            └── 123 -> cache/en/feb9ed37caf09e97ec0f49f65fccad64.cache
+            └── 123/
+                └── feb9ed37caf09e97ec0f49f65fccad64 [symlink] -> <cache-dir>/cache/en/feb9ed37caf09e97ec0f49f65fccad64.cache
         └── account/    
-            └── 21  -> cache/en/feb9ed37caf09e97ec0f49f65fccad64.cache
+            └── 21/
+                └── feb9ed37caf09e97ec0f49f65fccad64 [symlink] -> <cache-dir>/cache/en/feb9ed37caf09e97ec0f49f65fccad64.cache
 ```
 
 ## Performance Characteristics
@@ -69,7 +71,7 @@ links as well as write the cache file. The process involves the following steps:
 
 1. Construct the cache key declaration.
 2. Generate the canonical MD5 cache key and full path.
-3. Acquire an exclusive lock on the cache directory to prevent race conditions.
+3. Acquire an exclusive lock on the file to be cached, to prevent race conditions.
 4. Generate and serialize the data value to be cached using the supplied generator callable.
 5. Write the serialized data to the cache file.
 6. Close the file and release the lock.
@@ -78,3 +80,15 @@ links as well as write the cache file. The process involves the following steps:
 Despite all of these steps, cache storage and symbolic link creation can still be performed
 in as low as 0.5 milliseconds (500μs) for a small multi-property PHP object on modern SSD-based
 infrastructure with a modern file system. See `tests/PerformanceTests.php` for benchmarks.
+
+### File Locking
+
+TagCache uses file locking to ensure data integrity during cache writes. Shared locks
+are used for reading cache files, while exclusive locks are used for writing. This
+prevents race conditions and ensures that cache files are not corrupted during concurrent
+access. It also ensures that multiple processes do not attempt to generate the same cache
+simultaneously, which could lead to redundant work and potential inconsistencies.
+
+Lock acquisition is performed using a non-blocking call to allow for a default timeout
+period of 30 seconds. This means that if a process cannot acquire the lock within this
+timeframe, it will fail gracefully rather than hanging indefinitely.

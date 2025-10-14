@@ -9,24 +9,65 @@
 	use Throwable;
 	
 	/**
-	 * Represents the cache file/directory manager.
+	 * Manages the canonical cache file storage, fetching, deletion and creation of cache tags.
 	 */
 	class Cacher
 	{
+		/**
+		 * The default lifetime for cached entries in seconds (1 day).
+		 */
 		const int DEFAULT_LIFETIME = 86400;
-		const int LOCK_WAIT_TIMEOUT = 30; // Wait for a maximum of 30 seconds to acquire a lock (this allows large content generation to complete without being too eager).
-		const int LOCK_ATTEMPT_INTERVAL = 10000; // Attempt to acquire a lock every 10 milliseconds at most
+		
+		/**
+		 * Wait for a maximum of 30 seconds to acquire a lock. This allows large
+		 * content to be generated without causing other requests to wait forever.
+		 * If both requests require the same data, a long wait time is acceptable
+		 * since the second request would be generating the same amount of data if
+		 * it were to generate it itself.
+		 */
+		const int DEFAULT_LOCK_WAIT_TIMEOUT = 30;
+		
+		/**
+		 * How often to attempt to acquire a lock in microseconds (1 million = 1 second).
+		 * This interval was chosen to balance CPU usage and responsiveness.
+		 */
+		const int LOCK_ATTEMPT_INTERVAL = 10000;
+		
 		const string KEY_NAME_TAG = '_key_name';
+		
+		/**
+		 * @var string $cacheDirectory The directory where canonical cache files are stored.
+		 */
 		public readonly string $cacheDirectory;
+		
+		/**
+		 * @var string $tagDirectory The directory where tag symlinks are stored.
+		 */
 		public readonly string $tagDirectory;
 		
-		public float $lastGenerateTime = 0.0;
-		public float $lastLinksCreationTime = 0.0;
+		/**
+		 * @var int $lockTimeout The maximum time in seconds to wait for a lock. Default is 30 seconds.
+		 */
+		public readonly int $lockTimeout;
 		
+		/**
+		 * @var float $lastTimeToGenerate The time taken to generate the last cache entry in seconds (micro-second precision).
+		 */
+		public float $lastTimeToGenerate = 0.0;
+		
+		/**
+		 * @var float $lastTimeToCreateSymlinks The time taken to create links for the last cache entry in seconds (micro-second precision).
+		 */
+		public float $lastTimeToCreateSymlinks = 0.0;
+		
+		/**
+		 * @var bool $HASH_XXH128 Whether to use the modern XXH128 hashing algorithm for generating cache keys instead of MD5.
+		 */
 		const bool HASH_XXH128 = true;
 		
 		/**
-		 * @var string[] $removeNamespaces If set, these namespaces will be removed from the class names when generating tags, such as "App\Models\".
+		 * @var string[] $removeNamespaces If set, these namespaces will be removed from the class names when generating tags.
+		 * The default includes Laravel's App\Models\ namespace.
 		 */
 		public static array $removeNamespaces = [
 			'App\\Models\\'
@@ -40,12 +81,16 @@
 		/**
 		 * @param string $rootDirectory The root directory where cache and tag directories will be created.
 		 * @param string $language The language code for the cache (e.g., 'en', 'fr'). Default is 'en'.
+		 * @param int $lockTimeout The maximum time in seconds to wait for a lock. Default is 30 seconds.
 		 */
 		public function __construct(string $rootDirectory,
-		                            public readonly string $language = 'en')
+		                            public readonly string $language = 'en',
+		                            int $lockTimeout = self::DEFAULT_LOCK_WAIT_TIMEOUT)
 		{
 			$this->cacheDirectory = rtrim($rootDirectory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . $this->language . DIRECTORY_SEPARATOR;
 			$this->tagDirectory = rtrim($rootDirectory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'tags' . DIRECTORY_SEPARATOR . $this->language . DIRECTORY_SEPARATOR;
+			$this->lockTimeout = $lockTimeout;
+			
 			$this->createDirectory($this->cacheDirectory);
 			$this->createDirectory($this->tagDirectory);
 		}
@@ -119,7 +164,7 @@
 			if (!$fp)
 			{
 				if ($timedOut)
-					throw new CacheStorageException("Failed to acquire lock for writing after " . self::LOCK_WAIT_TIMEOUT . " seconds: $path");
+					throw new CacheStorageException("Failed to acquire lock for writing after $this->lockTimeout seconds: $path");
 				else
 					throw new CacheStorageException("Failed to open cache file for writing: $path");
 			}
@@ -145,11 +190,11 @@
 			fclose($fp);
 			@chmod($path, 0664);
 			
-			$this->lastGenerateTime = microtime(true) - $start;
+			$this->lastTimeToGenerate = microtime(true) - $start;
 			
 			$start = microtime(true);
 			$this->createLinks($key, $pathKey, $path);
-			$this->lastLinksCreationTime = microtime(true) - $start;
+			$this->lastTimeToCreateSymlinks = microtime(true) - $start;
 			
 			return $value;
 		}
@@ -382,23 +427,25 @@
 		 * Attempts to unlink (delete) a file if it exists. If it cannot be unlinked immediately,
 		 * it will attempt to wait for an exclusive lock on the file before unlinking it, but only
 		 * up to two seconds.
-		 * @param string $source
-		 * @return void
+		 * @param string $source The path to the file to unlink.
+		 * @return bool True if the file was successfully unlinked, false otherwise.
 		 */
-		private function unlink(string $source): void
+		private function unlink(string $source): bool
 		{
 			if (!file_exists($source))
-				return;
+				return false;
 			
 			if (@unlink($source))
-				return;
+				return true;
 			
 			if ($fp = $this->acquireLock($source, 'rb',LOCK_EX, $timedOut, 2))
 			{
 				flock($fp, LOCK_UN);
 				fclose($fp);
-				@unlink($source);
+				return @unlink($source);
 			}
+			
+			return false;
 		}
 		
 		/**
@@ -433,24 +480,25 @@
 		 * @param string $mode The file mode to open the file with (e.g., 'rb' for read, 'wb' for write).
 		 * @param int $lock The type of lock to acquire (LOCK_SH for shared, LOCK_EX for exclusive).
 		 * @param bool|null $timedOut Set to true if the lock acquisition timed out, false otherwise.
-		 * @param int $timeout The maximum time in seconds to wait for the lock.
+		 * @param int|null $timeout The maximum time in seconds to wait for the lock. Default is the instance's $lockTimeout.
 		 * @return resource|null The file pointer if the lock was acquired, or null on failure.
 		 */
 		private function acquireLock(string $path,
 		                             string $mode,
 		                             int $lock,
 		                             ?bool &$timedOut = null,
-		                             int $timeout = self::LOCK_WAIT_TIMEOUT)
+		                             ?int $timeout = null)
 		{
 			$timedOut = false;
 			
 			if (($fp = fopen($path, $mode)) === false)
 				return null;
 			
-			$start = time();
+			$start = microtime(true);
 			$lockAcquired = false;
+			$timeout = floatval($timeout ?? $this->lockTimeout);
 			
-			while ((time() - $start) < $timeout)
+			while ((microtime(true) - $start) < $timeout)
 			{
 				if (flock($fp, $lock | LOCK_NB))
 				{
@@ -469,5 +517,108 @@
 			}
 			
 			return $fp;
+		}
+		
+		/**
+		 * Removes expired cache files based on their modification time and an optional maximum total size.
+		 *
+		 * @param int $maximumLifetime The maximum lifetime of cache files in seconds. Default is 30 days.
+		 * @param int|null $bytesCleaned If provided, this will be set to the total number of bytes cleaned up.
+		 * @return int The number of cache files removed.
+		 */
+		public function cleanupExpiredCaches(int $maximumLifetime = 86400 * 30,
+		                                     ?int &$bytesCleaned = null): int
+		{
+			$bytesCleaned = 0;
+			$countRemoved = 0;
+			
+			$iterator = new FilesystemIterator($this->cacheDirectory, FilesystemIterator::SKIP_DOTS | FilesystemIterator::CURRENT_AS_PATHNAME);
+			foreach($iterator as $file)
+			{
+				if (!is_file($file))
+					continue;
+				
+				if ((time() - filemtime($file)) < $maximumLifetime)
+					continue;
+				
+				$size = filesize($file);
+				
+				if ($this->unlink($file))
+				{
+					$bytesCleaned += $size;
+					$countRemoved++;
+				}
+			}
+			return $countRemoved;
+		}
+		
+		/**
+		 * Calculates the total size of the cache directory in bytes.
+		 * @return int The total size of the cache directory in bytes.
+		 */
+		public function cacheSize(): int
+		{
+			$size = 0;
+			$iterator = new FilesystemIterator($this->cacheDirectory, FilesystemIterator::SKIP_DOTS | FilesystemIterator::CURRENT_AS_PATHNAME);
+			foreach($iterator as $file)
+			{
+				if (is_file($file))
+					$size += filesize($file);
+			}
+			return $size;
+		}
+		
+		/**
+		 * Removes symlinks in the tags directory that point to non-existent canonical cache files,
+		 * optionally removing empty nested tag directories. Top level tag-type directories are not removed.
+		 * This could be executed periodically as a maintenance task to clean up stale links.
+		 *
+		 * @return int The number of tag symlinks removed.
+		 */
+		public function cleanupStaleTags(): int
+		{
+			$directory = $this->tagDirectory;
+			
+			$countRemoved = 0;
+			$iterator1 = new FilesystemIterator($directory, FilesystemIterator::SKIP_DOTS | FilesystemIterator::CURRENT_AS_FILEINFO);
+			
+			foreach ($iterator1 as $item1)
+			{
+				if (!$item1->isDir())
+					continue;
+				
+				$iterator2 = new FilesystemIterator($directory, FilesystemIterator::SKIP_DOTS | FilesystemIterator::CURRENT_AS_FILEINFO);
+				$contentsCount = 0;
+				
+				foreach ($iterator2 as $item2)
+				{
+					if ($item2->isDir())
+					{
+						$contentsCount++;
+						continue;
+					}
+					
+					if ($item2->isLink())
+					{
+						$target = readlink($item2->getPathname());
+						if ($target === false || !file_exists($target))
+						{
+							@unlink($item2->getPathname());
+							$countRemoved++;
+						}
+						else
+							$contentsCount++;
+					}
+					else
+						$contentsCount++;
+				}
+				
+				if ($contentsCount == 0)
+				{
+					@rmdir($directory);
+				}
+			}
+			
+			return $countRemoved;
 		}
 	}
