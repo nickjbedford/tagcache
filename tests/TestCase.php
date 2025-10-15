@@ -7,6 +7,8 @@
 	
 	class TestCase extends PHPUnitTestCase
 	{
+		use AssertsArrays;
+		
 		protected Cacher $cacher;
 		
 		const string RESULTS_DIR = __DIR__ . '/.test-results';

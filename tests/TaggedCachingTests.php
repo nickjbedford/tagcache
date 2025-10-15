@@ -2,6 +2,7 @@
 	namespace Tests;
 	
 	use Throwable;
+	use YetAnother\TagCache\Cacher;
 	use YetAnother\TagCache\CacheStorageException;
 	use function YetAnother\TagCache\cache_key;
 	
@@ -112,5 +113,63 @@
 				
 				$this->cacher->invalidateObject($model);
 			}
+		}
+		
+		/**
+		 * @throws CacheStorageException
+		 * @throws Throwable
+		 */
+		function testMultiplyTaggedCacheIsCleanedOfMultipleDanglingSymlinks()
+		{
+			$text = 'Goodbye, world!';
+			$model1 = new TestObject(5);
+			$model2 = new OtherObject(99);
+			
+			$key = cache_key('greeting', $model1, $model2);
+			
+			$this->cacher->getOrGenerateText($key, fn() => $text);
+			$this->assertEquals(1, $this->cacher->invalidateObject($model1));
+			
+			// The cacher generates both $model1 and $model2 tags as well as symlinks in "_key_name/greeting/".
+			
+			$results = [];
+			$this->assertEquals(2, $this->cacher->cleanupStaleTags($results));
+			
+			$this->assertArrayIsIdentical([
+				'otherobject' => [
+					'99' => 1,
+				],
+				Cacher::KEY_NAME_TAG => [
+					'greeting' => 1,
+				]
+			], $results);
+		}
+		
+		/**
+		 * @throws CacheStorageException
+		 * @throws Throwable
+		 */
+		function testMultiplyTaggedCacheIsCleanedOfRemainingDanglingSymlink()
+		{
+			$text = 'Goodbye, world!';
+			$model1 = new TestObject(5);
+			$model2 = new OtherObject(99);
+			
+			$key = cache_key('greeting', $model1, $model2);
+			
+			$this->cacher->getOrGenerateText($key, fn() => $text);
+			$this->assertEquals(1, $this->cacher->invalidateObject($model1));
+			$this->assertEquals(1, $this->cacher->invalidateNamed('greeting'));
+			
+			// The cacher generates both $model1 and $model2 tags as well as symlinks in "_key_name/greeting/".
+			
+			$results = [];
+			$this->assertEquals(1, $this->cacher->cleanupStaleTags($results));
+			
+			$this->assertArrayIsIdentical([
+				'otherobject' => [
+					'99' => 1,
+				],
+			], $results);
 		}
 	}

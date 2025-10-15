@@ -193,7 +193,7 @@
 			$this->lastTimeToGenerate = microtime(true) - $start;
 			
 			$start = microtime(true);
-			$this->createLinks($key, $pathKey, $path);
+			$this->createTagLinks($key, $pathKey, $path);
 			$this->lastTimeToCreateSymlinks = microtime(true) - $start;
 			
 			return $value;
@@ -455,7 +455,7 @@
 		 * @param string $path The path to the cache file.
 		 * @return void
 		 */
-		private function createLinks(Key $key, string $canonicalKey, string $path): void
+		private function createTagLinks(Key $key, string $canonicalKey, string $path): void
 		{
 			$tags = $key->tags;
 			$tags[self::KEY_NAME_TAG] = $key->name;
@@ -573,49 +573,67 @@
 		 * optionally removing empty nested tag directories. Top level tag-type directories are not removed.
 		 * This could be executed periodically as a maintenance task to clean up stale links.
 		 *
+		 * @param array<string, array<int, string>>|null $results Pass a valid array variable to receive details of removed links.
 		 * @return int The number of tag symlinks removed.
 		 */
-		public function cleanupStaleTags(): int
+		public function cleanupStaleTags(?array &$results = null): int
 		{
 			$directory = $this->tagDirectory;
 			
-			$countRemoved = 0;
-			$iterator1 = new FilesystemIterator($directory, FilesystemIterator::SKIP_DOTS | FilesystemIterator::CURRENT_AS_FILEINFO);
+			if ($results !== null)
+				$results = [];
 			
-			foreach ($iterator1 as $item1)
+			$countRemoved = 0;
+			$typeDirectoryIterator = new FilesystemIterator($directory, FilesystemIterator::SKIP_DOTS | FilesystemIterator::CURRENT_AS_FILEINFO);
+			
+			foreach ($typeDirectoryIterator as $typeDirectory)
 			{
-				if (!$item1->isDir())
+				if (!$typeDirectory->isDir())
 					continue;
 				
-				$iterator2 = new FilesystemIterator($directory, FilesystemIterator::SKIP_DOTS | FilesystemIterator::CURRENT_AS_FILEINFO);
-				$contentsCount = 0;
+				$idDirectoryIterator = new FilesystemIterator($typeDirectory->getPathname(), FilesystemIterator::SKIP_DOTS | FilesystemIterator::CURRENT_AS_FILEINFO);
 				
-				foreach ($iterator2 as $item2)
+				foreach ($idDirectoryIterator as $idDirectory)
 				{
-					if ($item2->isDir())
-					{
-						$contentsCount++;
+					if (!$idDirectory->isDir())
 						continue;
-					}
 					
-					if ($item2->isLink())
+					$symlinkIterator = new FilesystemIterator($idDirectory->getPathname(), FilesystemIterator::SKIP_DOTS | FilesystemIterator::CURRENT_AS_FILEINFO);
+					$contentsCount = 0;
+					
+					if ($results !== null)
+						$results[$typeDirectory->getBasename()][$idDirectory->getBasename()] = 0;
+			
+					foreach ($symlinkIterator as $item2)
 					{
-						$target = readlink($item2->getPathname());
-						if ($target === false || !file_exists($target))
+						if ($item2->isDir())
 						{
-							@unlink($item2->getPathname());
-							$countRemoved++;
+							$contentsCount++;
+							continue;
+						}
+						
+						if ($item2->isLink())
+						{
+							$target = readlink($item2->getPathname());
+							if ($target === false || !file_exists($target))
+							{
+								@unlink($item2->getPathname());
+								$countRemoved++;
+								
+								if ($results !== null)
+									$results[$typeDirectory->getBasename()][$idDirectory->getBasename()]++;
+							}
+							else
+								$contentsCount++;
 						}
 						else
 							$contentsCount++;
 					}
-					else
-						$contentsCount++;
-				}
-				
-				if ($contentsCount == 0)
-				{
-					@rmdir($directory);
+					
+					if ($contentsCount == 0)
+					{
+						@rmdir($directory);
+					}
 				}
 			}
 			
