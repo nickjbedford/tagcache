@@ -40,10 +40,21 @@ cache-dir/
 The following performance benchmarks are based on tests run on an 2020 iMac Retina 5K
 with the following specifications:
 
+#### Development Workstation
+
+* macOS Sequoia 15.7 (24G222)
 * 3.3GHz Intel Core i5 6-Core processor
 * Apple 1TB SSD (APPLE SSD AP1024N Media)
-  * Benchmarked at ~2.5GB/s read and write speed
-* macOS Sequoia 15.7 (24G222)
+  * Benchmarked at ~2.5 GB/s read and write speed
+
+#### Amazon EC2 Web Server
+
+* Ubuntu Linux 24.04.3 LTS
+* Amazon EC2 `t3.small` instance
+* 2 vCPUs, 2 GiB memory
+* EBS gp3 volume SSD
+  * 3000 IOPS
+  * 125 MiB/s
 
 ### Cache Retrieval (Hit)
 
@@ -80,6 +91,31 @@ links as well as write the cache file. The process involves the following steps:
 Despite all of these steps, cache storage and symbolic link creation can still be performed
 in as low as 0.5 milliseconds (500μs) for a small multi-property PHP object on modern SSD-based
 infrastructure with a modern file system. See `tests/PerformanceTests.php` for benchmarks.
+
+### Benchmark Results
+
+The benchmark generates between 5000-5100 randomised cache files for testing cache hits. Each file is
+then read back in a loop to measure performance. This ensures that the operating system has the
+files cached in memory, simulating a real-world scenario where frequently accessed cache files
+are kept in memory by the OS. See `tests/PerformanceTests.php` for the benchmark code.
+
+The results are as follows:
+
+
+#### Development Workstation
+
+```text
+5009x cache hits took 0.163396 seconds
+Microseconds per cache hit: 32.62 μs
+```
+
+
+#### Amazon EC2 Web Server
+
+```text
+5061x cache hits took 0.10656 seconds
+Microseconds per cache hit: 21.055 μs
+```
 
 ### File Locking
 
