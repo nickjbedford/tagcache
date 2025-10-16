@@ -21,6 +21,17 @@
 		}
 		
 		/**
+		 * Creates a Cacheable instance from this Key with the specified lifetime and optional cacher.
+		 * @param int $lifetime The cache lifetime in seconds. Default is Cacher::DEFAULT_LIFETIME.
+		 * @param Cacher|null $cacher The cacher instance to use. If null, the default cacher will be used.
+		 * @return Cacheable A new Cacheable instance with this Key.
+		 */
+		public function cacheable(int $lifetime = Cacher::DEFAULT_LIFETIME, ?Cacher $cacher = null): Cacheable
+		{
+			return new Cacheable($this, $lifetime, $cacher);
+		}
+		
+		/**
 		 * Marks the cache as global, meaning it is tied to a global data tag that can be cleared with other global caches.
 		 * @return self The current Key instance for method chaining.
 		 */

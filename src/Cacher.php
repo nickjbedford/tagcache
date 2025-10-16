@@ -96,6 +96,35 @@
 		}
 		
 		/**
+		 * Sets this Cacher instance as the default instance.
+		 * @return void
+		 */
+		public function setAsDefault(): void
+		{
+			self::$default = $this;
+		}
+		
+		/**
+		 * Checks if a cached entry exists and is still valid based on the provided lifetime.
+		 * @param Key $key The cache key declaration.
+		 * @param int $lifetime The lifetime of the cache in seconds.
+		 * @return bool True if the cached entry exists and is valid, false otherwise.
+		 */
+		public function exists(Key $key, int $lifetime = self::DEFAULT_LIFETIME): bool
+		{
+			$hash = $key->hashedKey;
+			$path = "$this->cacheDirectory$hash.cache";
+			
+			if (!file_exists($path))
+				return false;
+			
+			if ((filemtime($path) + $lifetime) < time())
+				return false;
+			
+			return true;
+		}
+		
+		/**
 		 * Attempts to retrieve cached text content. If the content is not found or has expired, null is returned.
 		 * @param string|Key $key The cache key or Key declaration.
 		 * @param int $lifetime The lifetime of the cache in seconds. The default is 86400 seconds (1 day).
@@ -104,11 +133,7 @@
 		public function getText(string|Key $key,
 		                        int $lifetime = self::DEFAULT_LIFETIME): ?string
 		{
-			if ($key instanceof Key)
-				$key = $key->key;
-			
-			$key = Key::hash($key);
-			
+			$key = $key instanceof Key ? $key->hashedKey : Key::hash($key);
 			$path = "$this->cacheDirectory$key.cache";
 			
 			if (!file_exists($path))
@@ -400,6 +425,18 @@
 		}
 		
 		/**
+		 * Invalidates a specific cache entry based on the provided Key declaration.
+		 * @param Key $key The cache key declaration.
+		 * @return void
+		 */
+		public function invalidateKey(Key $key): void
+		{
+			$pathKey = $key->hashedKey;
+			$path = "$this->cacheDirectory$pathKey.cache";
+			$this->unlink($path);
+		}
+		
+		/**
 		 * Creates a directory if it does not exist, ensuring it is writable and has the correct permissions.
 		 * @param string $directory The directory path to create.
 		 * @return void
@@ -517,6 +554,23 @@
 			}
 			
 			return $fp;
+		}
+		
+		/**
+		 * Acquires an exclusive lock for writing to the cache file associated with the given key.
+		 *
+		 * @param Key $key The cache key declaration.
+		 * @param bool|null $timedOut Set to true if the lock acquisition timed out, false otherwise.
+		 * @param int|null $timeout The maximum time in seconds to wait for the lock. Default is the instance's $lockTimeout.
+		 * @return resource|null The file pointer if the lock was acquired, or null on failure.
+		 */
+		function acquireLockForWriting(Key   $key,
+		                               ?bool &$timedOut = null,
+		                               ?int  $timeout = null): mixed
+		{
+			$pathKey = $key->hashedKey;
+			$path = "$this->cacheDirectory$pathKey.cache";
+			return $this->acquireLock($path, 'wb', LOCK_EX, $timedOut, $timeout);
 		}
 		
 		/**

@@ -19,6 +19,7 @@
 			$rootDirectory = __DIR__ . DIRECTORY_SEPARATOR . '.caches';
 			$this->removeDirectory($rootDirectory);
 			$this->cacher = new Cacher($rootDirectory);
+			$this->cacher->setAsDefault();
 			Cacher::$removeNamespaces[] = 'Tests\\';
 			
 			if (!is_dir(self::RESULTS_DIR))
