@@ -46,45 +46,63 @@
 		
 		/**
 		 * Tags the key with a date using the specified format. Default format is 'Ymd'.
-		 * @param int|string $timestamp The date as a timestamp or date string.
+		 * If timestamp is null, no tagging is performed.
+		 *
+		 * @param int|string|null $timestamp The date as a timestamp or date string.
 		 * @param string $key The key to use for the date tag. Default is 'date'.
 		 * @param string $format The date format to use. Default is 'Ymd'.
 		 * @return self The current Key instance for method chaining.
 		 */
-		public function dated(int|string $timestamp, string $key = 'date', string $format = 'Ymd'): self
+		public function dated(int|string|null $timestamp, string $key = 'date', string $format = 'Ymd'): self
 		{
+			if ($timestamp === null)
+				return $this;
+			
 			if (is_string($timestamp))
 				$timestamp = strtotime($timestamp) ?: 0;
+			
 			return $this->tag($key, date($format, $timestamp));
 		}
 		
 		/**
 		 * Tags the key with a date range using 'datefrom' and 'dateto' tags. Default format is 'Ymd'.
-		 * @param int|string $from The start date as a timestamp or date string.
-		 * @param int|string $to The end date as a timestamp or date string.
+		 * If from or to is null, that tag is not added.
+		 *
+		 * @param int|string|null $from The start date as a timestamp or date string.
+		 * @param int|string|null $to The end date as a timestamp or date string.
+		 * @param string $format
 		 * @return self The current Key instance for method chaining.
 		 */
-		public function dateRange(int|string $from, int|string $to, string $format = 'Ymd'): self
+		public function dateRange(int|string|null $from, int|string|null $to, string $format = 'Ymd'): self
 		{
 			if (is_string($from))
 				$from = strtotime($from) ?: 0;
+			
+			if ($from !== null)
+				$this->tag('datefrom', date($format, $from));
+			
 			if (is_string($to))
 				$to = strtotime($to) ?: 0;
 			
-			return $this
-				->tag('datefrom', date($format, $from))
-				->tag('dateto', date($format, $to));
+			if ($to !== null)
+				$this->tag('dateto', date($format, $to));
+			
+			return $this;
 		}
 		
 		/**
 		 * Tags the key with an object using its class name and a key property. Default is $id.
-		 * @param object $object The object to tag the cache with.
+		 *
+		 * @param object|null $object $object The object to tag the cache with. If null, no tagging is performed.
 		 * @param string $property The property of the object to use as the identifier. Default is 'id'.
 		 * @param bool $classBasename If true, only the class basename will be used (without namespace). Default is false.
 		 * @return self The current Key instance for method chaining.
 		 */
-		public function object(object $object, string $property = 'id', bool $classBasename = false): self
+		public function object(?object $object, string $property = 'id', bool $classBasename = false): self
 		{
+			if ($object === null)
+				return $this;
+			
 			$type = $object::class;
 			if ($classBasename)
 			{
@@ -118,9 +136,7 @@
 		public function tag(string $type, string|int|null $id): self
 		{
 			foreach(Cacher::$removeNamespaces as $namespace)
-			{
 				$type = str_replace($namespace, '', $type);
-			}
 			
 			$type = sanitize_cache_key(ltrim($type, '\\'));
 			$id = sanitize_cache_key(strval($id ?? 0));
