@@ -26,7 +26,7 @@
 		 * @param Cacher|null $cacher The cacher instance to use. If null, the default cacher will be used.
 		 */
 		public function __construct(public readonly Key $key,
-									public readonly int $lifetime = Cacher::DEFAULT_LIFETIME,
+									public int $lifetime = Cacher::DEFAULT_LIFETIME,
 		                            ?Cacher $cacher = null)
 		{
 			$cacher ??= Cacher::$default;
@@ -75,6 +75,94 @@
 		{
 			$this->duringLock = $duringLock;
 			return $this;
+		}
+		
+		/**
+		 * Sets the cache lifetime in minutes.
+		 * @param int $minutes The number of minutes for the cache lifetime. Default is 1 minute.
+		 * @return $this
+		 */
+		public function minutes(int $minutes = 1): self
+		{
+			$this->lifetime = $minutes * 60;
+			return $this;
+		}
+		
+		/**
+		 * Sets the cache lifetime in hours.
+		 * @param int $hours The number of hours for the cache lifetime. Default is 1 hour.
+		 * @return $this
+		 */
+		public function hours(int $hours = 1): self
+		{
+			$this->lifetime = $hours * 3600;
+			return $this;
+		}
+		
+		/**
+		 * Sets the cache lifetime to 12 hours.
+		 * @return $this
+		 */
+		public function twelveHours(): self
+		{
+			return $this->hours(12);
+		}
+		
+		/**
+		 * Sets the cache lifetime to 6 hours.
+		 * @return $this
+		 */
+		public function sixHours(): self
+		{
+			return $this->hours(6);
+		}
+		
+		/**
+		 * Sets the cache lifetime to 3 hours.
+		 * @return $this
+		 */
+		public function fourHours(): self
+		{
+			return $this->hours(3);
+		}
+		
+		/**
+		 * Sets the cache lifetime to 3 hours.
+		 * @return $this
+		 */
+		public function threeHours(): self
+		{
+			return $this->hours(3);
+		}
+		
+		/**
+		 * Sets the cache lifetime to 2 hours.
+		 * @return $this
+		 */
+		public function twoHours(): self
+		{
+			return $this->hours(2);
+		}
+		
+		/**
+		 * Sets the cache lifetime in days.
+		 * @param int $days The number of days for the cache lifetime. Default is 1 day.
+		 * @return $this
+		 */
+		public function days(int $days = 1): self
+		{
+			$this->lifetime = $days * 86400;
+			return $this;
+		}
+		
+		/**
+		 * Sets the cache lifetime in weeks.
+		 * @param int $weeks The number of weeks for the cache lifetime. Default is 1 week.
+		 * @return $this
+		 */
+		public function weeks(int $weeks = 1): self
+		{
+			return $this->days($weeks * 7);
 		}
 		
 		/**
