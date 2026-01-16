@@ -5,6 +5,8 @@
 	use YetAnother\TagCache\CacheStorageException;
 	use YetAnother\TagCache\Key;
 	use YetAnother\TagCache\OutputBufferException;
+	use function YetAnother\TagCache\global_cache;
+	use function YetAnother\TagCache\global_cacheable;
 	
 	class CacheableTests extends TestCase
 	{
@@ -69,5 +71,24 @@
 				while (ob_get_level() >= $bufferLevel)
 					ob_end_clean();
 			}
+		}
+		
+		/**
+		 * @throws Throwable
+		 * @throws CacheStorageException
+		 */
+		function testGlobalCacheableCreatesGlobalCache()
+		{
+			$cacheable = global_cache('TestData');
+			
+			$this->assertNull($cacheable->text());
+			
+			$cacheable->text(fn() => 'Hello, world!');
+			
+			$this->assertEquals('Hello, world!', $cacheable->text());
+			
+			$cacheable->invalidate();
+			
+			$this->assertNull($cacheable->text());
 		}
 	}

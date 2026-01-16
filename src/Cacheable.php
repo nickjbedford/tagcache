@@ -78,22 +78,28 @@
 		}
 		
 		/**
-		 * Gets the cached data or generates it using the provided generator function.
+		 * Gets the cached data or generates it using the provided generator function (if provided).
 		 * @throws Throwable if an error occurs during cache generation.
 		 * @throws CacheStorageException if there is an error with the cache storage.
 		 */
-		public function text(callable|Closure $generator): ?string
+		public function text(callable|Closure|null $generator = null): ?string
 		{
+			if ($generator === null)
+				return $this->cacher->getText($this->key, $this->lifetime);
 			return $this->cacher->getOrGenerateText($this->key, $generator, $this->lifetime, true);
 		}
 		
 		/**
-		 * Gets the cached (serialized) data or generates it using the provided generator function.
+		 * Gets the cached (serialized) data or generates it using the provided generator function (if provided).
+		 *
+		 * @return mixed The cached or generated data.
+		 *@throws CacheStorageException if there is an error with the cache storage.
 		 * @throws Throwable if an error occurs during cache generation.
-		 * @throws CacheStorageException if there is an error with the cache storage.
 		 */
-		public function data(callable|Closure $generator): mixed
+		public function data(callable|Closure|null $generator = null): mixed
 		{
+			if ($generator === null)
+				return $this->cacher->get($this->key, $this->lifetime);
 			return $this->cacher->getOrGenerate($this->key, $generator, $this->lifetime, true, $this->duringLock);
 		}
 		

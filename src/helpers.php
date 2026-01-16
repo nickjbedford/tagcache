@@ -25,3 +25,16 @@
 	{
 		return new Key($name)->with($objects);
 	}
+	
+	/**
+	 * Creates a global Cacheable object with the specified name and lifetime.
+	 *
+	 * @param string $name The name of the cacheable item.
+	 * @param int $lifetime The lifetime of the cacheable item in seconds.
+	 * @param Cacher|null $cacher Optional. Cacher instance to use for caching, otherwise the default.
+	 * @return Cacheable
+	 */
+	function global_cache(string $name, int $lifetime = Cacher::DEFAULT_LIFETIME, ?Cacher $cacher = null): Cacheable
+	{
+		return cache_key($name)->cacheable($lifetime, $cacher);
+	}
